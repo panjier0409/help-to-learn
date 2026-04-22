@@ -236,7 +236,7 @@ def parse_sub_file(path: str) -> list[Segment]:
 def merge_nearby_segments(
     segments: list[Segment],
     gap_threshold: float = 0.5,
-    max_duration: float = 30.0,
+    max_duration: float = 15.0,
 ) -> list[Segment]:
     """
     Merge adjacent segments whose gap is smaller than *gap_threshold* seconds,

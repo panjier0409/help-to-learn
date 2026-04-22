@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
@@ -10,13 +11,13 @@ from backend.models.segment import Segment
 from backend.models.material import Material
 from backend.models.push_record import PushRecord, Platform, PushStatus
 from backend.schemas.push_record import PushRequest, PushRecordRead
-from backend.services import anki_service, telegram_service
+from backend.services import telegram_service
 from backend.config import settings
 
 router = APIRouter()
 
 
-def _do_push(segment: Segment, user: User, platform: Platform, session: Session) -> PushRecord:
+def _do_push(segment: Segment, user: User, platform: Platform, session: Session, anki_note_id: Optional[int] = None) -> PushRecord:
     from backend.config import settings as cfg
 
     record = PushRecord(
@@ -36,23 +37,8 @@ def _do_push(segment: Segment, user: User, platform: Platform, session: Session)
         )
 
         if platform == Platform.anki:
-            if not anki_service.check_connection(cfg.ANKI_CONNECT_URL):
-                raise RuntimeError(
-                    "Cannot connect to Anki. Make sure Anki is open with AnkiConnect installed."
-                )
-            audio_filename = os.path.basename(segment.audio_file_path)
-            anki_service.store_media_file(cfg.ANKI_CONNECT_URL, audio_filename, segment.audio_file_path)
-            note_id = anki_service.add_note(
-                cfg.ANKI_CONNECT_URL,
-                user.anki_deck_name,
-                front_text=segment.text,
-                back_text=segment.text,
-                audio_filename=audio_filename,
-                translation=segment.translation,
-                model_name=user.anki_model_name,
-                share_url=share_url,
-            )
-            record.anki_card_id = note_id
+            # Backend just records the push, actual network push is handled in frontend
+            record.anki_card_id = anki_note_id
 
         elif platform == Platform.telegram:
             if not user.telegram_chat_id:
@@ -107,7 +93,7 @@ def push_segment(
     if not segment or segment.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Segment not found")
 
-    record = _do_push(segment, current_user, body.platform, session)
+    record = _do_push(segment, current_user, body.platform, session, body.anki_note_id)
     if record.status == PushStatus.failed:
         raise HTTPException(status_code=502, detail=record.error_msg)
     return record
@@ -136,7 +122,7 @@ def push_material(
 
     results = []
     for segment in segments:
-        record = _do_push(segment, current_user, body.platform, session)
+        record = _do_push(segment, current_user, body.platform, session, body.anki_note_id)
         results.append(record)
 
     return results

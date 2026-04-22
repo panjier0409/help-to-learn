@@ -6,6 +6,7 @@ from backend.models.push_record import Platform, PushStatus
 
 class PushRequest(BaseModel):
     platform: Platform
+    anki_note_id: Optional[int] = None
 
 
 class PushRecordRead(BaseModel):

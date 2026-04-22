@@ -113,7 +113,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { materialsApi, segmentsApi } from '../api/index.js'
+import api, { materialsApi, segmentsApi, usersApi } from '../api/index.js'
 
 const route = useRoute()
 const materialId = Number(route.params.id)
@@ -125,6 +125,7 @@ const pushing = ref(false)
 const toast = ref(null)
 const editingId = ref(null)
 const editForm = ref({ text: '', translation: '' })
+const userConfig = ref(null)
 
 // Audio sequence logic
 const isSequencePlaying = ref(false)
@@ -197,13 +198,91 @@ async function loadSegments() {
   }
 }
 
+// --- AnkiConnect Frontend Helpers ---
+async function ankiRequest(action, params = {}) {
+  const res = await fetch('http://127.0.0.1:8765', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, version: 6, params })
+  })
+  if (!res.ok) throw new Error('Network error or CORS')
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data.result
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const b64 = reader.result.split(',')[1]
+      resolve(b64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function doAnkiPush(seg) {
+  const shareUrl = `${window.location.origin}/share/${materialId}#seg-${seg.id}`
+  const audioFilename = `seg_${seg.id}_${Date.now()}.mp3`
+
+  // 1. Download audio from backend API
+  const audioRes = await api.get(`/audio/${seg.id}`, { responseType: 'blob' })
+  const blob = audioRes.data
+  const b64Data = await blobToBase64(blob)
+
+  // 2. Ensure deck exists
+  const deckName = userConfig.value?.anki_deck_name || "English::Listening"
+  await ankiRequest('createDeck', { deck: deckName })
+
+  // 3. Store media
+  await ankiRequest('storeMediaFile', {
+    filename: audioFilename,
+    data: b64Data
+  })
+
+  // 4. Add Note
+  let front = seg.text
+  if (seg.translation) front += `<br><small style='color:#666'>${seg.translation}</small>`
+  front += `<br><small><a href='${shareUrl}' style='color:#4a9eff'>🔗 View online</a></small>`
+
+  let back = `[sound:${audioFilename}]`
+
+  const noteId = await ankiRequest('addNote', {
+    note: {
+      deckName: deckName,
+      modelName: userConfig.value?.anki_model_name || "Basic",
+      fields: { "正面": front, "背面": back },
+      options: { allowDuplicate: false }
+    }
+  })
+  
+  if (!noteId) throw new Error('AnkiConnect returned null (duplicate or error)')
+  return noteId
+}
+
 async function pushSeg(seg, platform) {
   pushing.value = true
   try {
-    await segmentsApi.push(seg.id, platform)
-    showToast(`Sent to ${platform}!`, 'success')
+    if (platform === 'anki') {
+      try {
+        const noteId = await doAnkiPush(seg)
+        await segmentsApi.push(seg.id, 'anki', noteId)
+        showToast(`Sent to Anki!`, 'success')
+      } catch (e) {
+        if (e.message.includes('CORS') || e.message === 'Failed to fetch') {
+          showToast('Anki blocked the request. Please set webCorsOriginList in AnkiConnect config!', 'danger')
+        } else {
+          throw e
+        }
+      }
+    } else {
+      await segmentsApi.push(seg.id, platform)
+      showToast(`Sent to ${platform}!`, 'success')
+    }
   } catch (e) {
-    showToast(e.response?.data?.detail || `Push to ${platform} failed`, 'danger')
+    showToast(e.response?.data?.detail || e.message || `Push to ${platform} failed`, 'danger')
   } finally {
     pushing.value = false
   }
@@ -213,10 +292,27 @@ async function bulkPush(platform) {
   if (!confirm(`Push all ${segments.value.length} segments to ${platform}?`)) return
   pushing.value = true
   try {
-    await materialsApi.push(materialId, platform)
-    showToast(`All segments pushed to ${platform}!`, 'success')
+    if (platform === 'anki') {
+      let count = 0
+      for (const seg of segments.value) {
+        try {
+          const noteId = await doAnkiPush(seg)
+          await segmentsApi.push(seg.id, 'anki', noteId)
+          count++
+        } catch (e) {
+          if (e.message.includes('CORS') || e.message === 'Failed to fetch') {
+            throw new Error('Anki blocked the request. Add this site to webCorsOriginList in AnkiConnect.')
+          }
+          console.error("Failed seg:", seg.id, e)
+        }
+      }
+      showToast(`Pushed ${count}/${segments.value.length} segments to Anki!`, 'success')
+    } else {
+      await materialsApi.push(materialId, platform)
+      showToast(`All segments pushed to ${platform}!`, 'success')
+    }
   } catch (e) {
-    showToast(e.response?.data?.detail || 'Bulk push failed', 'danger')
+    showToast(e.response?.data?.detail || e.message || 'Bulk push failed', 'danger')
   } finally {
     pushing.value = false
   }
@@ -264,6 +360,10 @@ function showToast(msg, type = 'info') {
 }
 
 onMounted(async () => {
+  try {
+    const uRes = await usersApi.me()
+    userConfig.value = uRes.data
+  } catch(e) {}
   await loadMaterial()
   await loadSegments()
 })

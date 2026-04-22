@@ -65,7 +65,7 @@ export const materialsApi = {
 export const segmentsApi = {
   get: (id) => api.get(`/segments/${id}`),
   update: (id, data) => api.patch(`/segments/${id}`, data),
-  push: (id, platform) => api.post(`/segments/${id}/push`, { platform }),
+  push: (id, platform, anki_note_id = null) => api.post(`/segments/${id}/push`, { platform, anki_note_id }),
   pushRecords: (id) => api.get(`/segments/${id}/push-records`),
 }
 
