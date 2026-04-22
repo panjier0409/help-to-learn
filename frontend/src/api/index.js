@@ -1,0 +1,81 @@
+import axios from 'axios'
+import { useAuthStore } from '../stores/auth.js'
+
+const api = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+})
+
+// Attach access token to every request
+api.interceptors.request.use((config) => {
+  const auth = useAuthStore()
+  if (auth.accessToken) {
+    config.headers.Authorization = `Bearer ${auth.accessToken}`
+  }
+  return config
+})
+
+// On 401, try to refresh; on failure, redirect to login
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const auth = useAuthStore()
+    if (error.response?.status === 401 && auth.refreshToken) {
+      try {
+        const res = await axios.post('/api/auth/refresh', {
+          refresh_token: auth.refreshToken,
+        })
+        auth.setTokens(res.data.access_token, auth.refreshToken)
+        error.config.headers.Authorization = `Bearer ${res.data.access_token}`
+        return axios(error.config)
+      } catch {
+        auth.logout()
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ── Auth ─────────────────────────────────────────
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+}
+
+// ── Materials ────────────────────────────────────
+export const materialsApi = {
+  list: (page = 1, size = 20) => api.get('/materials', { params: { page, size } }),
+  get: (id) => api.get(`/materials/${id}`),
+  delete: (id) => api.delete(`/materials/${id}`),
+  uploadFile: (formData) => api.post('/materials/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  }),
+  importUrlMedia: (data) => api.post('/materials/url-media', data),
+  importUrlArticle: (data) => api.post('/materials/url-article', data),
+  importText: (data) => api.post('/materials/text', data),
+  getSegments: (id) => api.get(`/materials/${id}/segments`),
+  push: (id, platform) => api.post(`/materials/${id}/push`, { platform }),
+}
+
+// ── Segments ─────────────────────────────────────
+export const segmentsApi = {
+  get: (id) => api.get(`/segments/${id}`),
+  update: (id, data) => api.patch(`/segments/${id}`, data),
+  push: (id, platform) => api.post(`/segments/${id}/push`, { platform }),
+  pushRecords: (id) => api.get(`/segments/${id}/push-records`),
+}
+
+// ── Jobs ─────────────────────────────────────────
+export const jobsApi = {
+  get: (id) => api.get(`/jobs/${id}`),
+}
+
+// ── Users ────────────────────────────────────────
+export const usersApi = {
+  me: () => api.get('/users/me'),
+  update: (data) => api.patch('/users/me', data),
+}
+
+export default api

@@ -1,0 +1,20 @@
+from sqlmodel import SQLModel, Field
+from datetime import datetime
+from typing import Optional
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True, max_length=64)
+    email: str = Field(unique=True, index=True, max_length=256)
+    hashed_password: str
+
+    telegram_chat_id: Optional[str] = Field(default=None, max_length=64)
+    anki_deck_name: str = Field(default="English::Listening", max_length=256)
+    tts_worker_url: str = Field(default="https://tts.wangwangit.com", max_length=512)
+    tts_token: Optional[str] = Field(default=None, max_length=256)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    is_active: bool = Field(default=True)

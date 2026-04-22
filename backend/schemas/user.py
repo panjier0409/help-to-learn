@@ -1,0 +1,23 @@
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
+from typing import Optional
+
+
+class UserRead(BaseModel):
+    id: int
+    username: str
+    email: str
+    telegram_chat_id: Optional[str]
+    anki_deck_name: str
+    tts_worker_url: str
+    created_at: datetime
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    telegram_chat_id: Optional[str] = None
+    anki_deck_name: Optional[str] = None
+    tts_worker_url: Optional[str] = None
+    tts_token: Optional[str] = None

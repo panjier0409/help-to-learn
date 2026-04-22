@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data       # SQLite database
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:////app/data/data.db
+      - STORAGE_BASE_PATH=/app/storage
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
