@@ -57,6 +57,8 @@ export const materialsApi = {
   importText: (data) => api.post('/materials/text', data),
   getSegments: (id) => api.get(`/materials/${id}/segments`),
   push: (id, platform) => api.post(`/materials/${id}/push`, { platform }),
+  reExecute: (id) => api.post(`/materials/${id}/re-execute`),
+  deleteStorage: (id) => api.delete(`/materials/${id}/storage`),
 }
 
 // ── Segments ─────────────────────────────────────

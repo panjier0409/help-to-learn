@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from datetime import datetime
 from typing import Optional
 
@@ -207,6 +208,34 @@ def delete_material(
     session.commit()
 
 
+@router.delete("/{material_id}/storage", status_code=status.HTTP_204_NO_CONTENT)
+def delete_material_storage(
+    material_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Hard-delete of physical files: removes originals, audio, and temp folders."""
+    material = session.get(Material, material_id)
+    if not material or material.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    # Paths to cleanup
+    paths_to_delete = [
+        os.path.join(settings.STORAGE_BASE_PATH, "originals", str(current_user.id), str(material.id)),
+        os.path.join(settings.STORAGE_BASE_PATH, "audio", str(current_user.id), str(material.id)),
+        os.path.join(settings.STORAGE_BASE_PATH, "temp", str(current_user.id), str(material.id)),
+    ]
+
+    for path in paths_to_delete:
+        if os.path.exists(path):
+            shutil.rmtree(path, ignore_errors=True)
+
+    material.original_file_path = None
+    material.updated_at = datetime.utcnow()
+    session.add(material)
+    session.commit()
+
+
 @router.get("/{material_id}/segments")
 def get_material_segments(
     material_id: int,
@@ -223,3 +252,32 @@ def get_material_segments(
         .order_by(Segment.index)
     ).all()
     return list(segments)
+
+
+@router.post("/{material_id}/re-execute", response_model=MaterialJobCreated)
+def re_execute_material(
+    material_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Restart processing for a material. Resets status and deletes existing segments."""
+    material = session.get(Material, material_id)
+    if not material or material.user_id != current_user.id or material.is_deleted:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    # Reset material status
+    material.status = MaterialStatus.pending
+    material.error_msg = None
+    material.updated_at = datetime.utcnow()
+
+    # Delete old segments
+    old_segments = session.exec(select(Segment).where(Segment.material_id == material_id)).all()
+    for seg in old_segments:
+        session.delete(seg)
+
+    session.add(material)
+    session.commit()
+    session.refresh(material)
+
+    job = _create_job(session, material.id)
+    return MaterialJobCreated(material_id=material.id, job_id=job.id)

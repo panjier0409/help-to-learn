@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-to-a-long-random-secret-string"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # Public-facing site domain, used to generate share links sent to Telegram/Anki.
+    # Example: https://learn.example.com  (no trailing slash)
+    SITE_BASE_URL: str = "http://localhost:5173"
 
     # Database & Storage
     DATABASE_URL: str = "sqlite:///./data.db"

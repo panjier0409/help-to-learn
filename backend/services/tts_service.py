@@ -10,7 +10,44 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_VOICE = "en-US-JennyNeural"
+import random
+
+DEFAULT_VOICE = "en-US-AvaMultilingualNeural"
+
+# Curated high-quality neural voices from Microsoft Edge TTS
+# These are considered more natural and less "scripted" than standard voices.
+VOICES = {
+    "en": [
+        "en-US-AvaMultilingualNeural",
+        "en-US-AndrewMultilingualNeural",
+        "en-US-EmmaMultilingualNeural",
+        "en-US-BrianMultilingualNeural",
+        "en-US-AvaNeural",
+        "en-US-AndrewNeural",
+        "en-US-AriaNeural",
+        "en-US-SteffanNeural",
+        "en-GB-SoniaNeural",
+        "en-GB-RyanNeural",
+    ],
+    "zh": [
+        "zh-CN-XiaoxiaoMultilingualNeural",
+        "zh-CN-YunyiMultilingualNeural",
+        "zh-CN-XiaoxiaoNeural",
+        "zh-CN-YunxiNeural",
+        "zh-CN-XiaoyiNeural",
+        "zh-CN-YunjianNeural",
+        "zh-CN-XiaomengNeural",
+    ]
+}
+
+
+def get_random_voice(lang: str = "en") -> str:
+    """Pick a random voice for the given language prefix (e.g. 'en', 'zh')."""
+    # Normalize language code (e.g. 'en-US' -> 'en')
+    lang_prefix = lang.split('-')[0].lower()
+    voice_list = VOICES.get(lang_prefix, VOICES["en"])
+    return random.choice(voice_list)
+
 
 
 def synthesize(

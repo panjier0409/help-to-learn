@@ -62,3 +62,54 @@ def serve_audio(segment_id: int, session: _Session = Depends(_gs)):
 @app.get("/api/health", tags=["Health"])
 def health():
     return {"status": "ok"}
+
+
+# ── Public share routes (no auth required) ──────────────────────────────────
+from backend.models.material import Material as _Material
+from backend.models.segment import Segment as _Segment
+from sqlmodel import select as _select
+
+
+@app.get("/api/share/{material_id}", tags=["Share"])
+def get_shared_material(material_id: int, session: _Session = Depends(_gs)):
+    """Public endpoint: return material info without authentication."""
+    from fastapi import HTTPException
+    material = session.get(_Material, material_id)
+    if not material or material.is_deleted:
+        raise HTTPException(status_code=404, detail="Material not found")
+    return {
+        "id": material.id,
+        "title": material.title,
+        "language": material.language,
+        "status": material.status,
+        "source_type": material.source_type,
+        "duration": material.duration,
+        "created_at": material.created_at,
+    }
+
+
+@app.get("/api/share/{material_id}/segments", tags=["Share"])
+def get_shared_segments(material_id: int, session: _Session = Depends(_gs)):
+    """Public endpoint: return segments without authentication."""
+    from fastapi import HTTPException
+    material = session.get(_Material, material_id)
+    if not material or material.is_deleted:
+        raise HTTPException(status_code=404, detail="Material not found")
+    segments = session.exec(
+        _select(_Segment)
+        .where(_Segment.material_id == material_id)
+        .order_by(_Segment.index)
+    ).all()
+    return [
+        {
+            "id": s.id,
+            "index": s.index,
+            "text": s.text,
+            "translation": s.translation,
+            "start_time": s.start_time,
+            "end_time": s.end_time,
+            "audio_source_type": s.audio_source_type,
+        }
+        for s in segments
+    ]
+

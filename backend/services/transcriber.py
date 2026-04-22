@@ -110,7 +110,7 @@ def _transcribe_file(
     # Fallback: no timestamps — return whole text as single segment
     text = result.get("text", "").strip()
     if text:
-        logger.warning("STT returned no segments with timestamps, using full text as single segment")
+        logger.warning(f"STT returned no segments with timestamps, using full text as single segment. Raw response: {result}")
         from backend.services.processor import get_duration
         try:
             duration = get_duration(audio_path)

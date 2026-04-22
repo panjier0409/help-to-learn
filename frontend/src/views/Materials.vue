@@ -43,6 +43,14 @@
                 <td>{{ m.language }}</td>
                 <td class="text-muted small">{{ fmtDate(m.created_at) }}</td>
                 <td>
+                  <button class="btn btn-sm btn-outline-warning me-1"
+                    @click.stop="reExecute(m)"
+                    title="Re-execute processing"
+                    :id="`btn-reexecute-${m.id}`">🔄</button>
+                  <button class="btn btn-sm btn-outline-secondary me-1"
+                    @click.stop="cleanupStorage(m)"
+                    title="Clean disk storage (permanent)"
+                    :id="`btn-cleanup-${m.id}`">🧹</button>
                   <button class="btn btn-sm btn-outline-danger"
                     @click.stop="confirmDelete(m)"
                     :id="`btn-delete-${m.id}`">✕</button>
@@ -229,6 +237,11 @@ async function submitImport() {
     }
 
     Modal.getInstance(document.getElementById('addModal'))?.hide()
+    // Cleanup backdrop if it lingers
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
+    document.body.classList.remove('modal-open')
+    document.body.style.paddingRight = ''
+
     showToast('Material added! Processing will start shortly.', 'success')
     load()
   } catch (e) {
@@ -246,6 +259,28 @@ async function confirmDelete(m) {
     load()
   } catch (e) {
     showToast('Delete failed', 'danger')
+  }
+}
+
+async function cleanupStorage(m) {
+  if (!confirm(`Permanently delete all audio and video files for "${m.title}"? This cannot be undone.`)) return
+  try {
+    await materialsApi.deleteStorage(m.id)
+    showToast('Storage cleaned up', 'success')
+    load()
+  } catch (e) {
+    showToast('Cleanup failed', 'danger')
+  }
+}
+
+async function reExecute(m) {
+  if (!confirm(`Restart processing for "${m.title}"? Old results will be deleted.`)) return
+  try {
+    await materialsApi.reExecute(m.id)
+    showToast('Processing restarted', 'success')
+    load()
+  } catch (e) {
+    showToast('Restart failed', 'danger')
   }
 }
 

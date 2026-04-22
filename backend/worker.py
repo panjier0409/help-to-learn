@@ -196,11 +196,15 @@ def process_text_material(material: Material, session: Session) -> None:
         user = s.get(User, material.user_id)
         worker_url = (user.tts_worker_url if user else None) or settings.TTS_WORKER_URL
 
+    # Pick a random voice for this entire material to keep it consistent within segments
+    selected_voice = tts_service.get_random_voice(material.language)
+    logger.info(f"Selected random voice for material {material.id}: {selected_voice}")
+
     for i, sentence in enumerate(sentences, start=1):
         seg_filename = f"seg_{i:03d}.mp3"
         seg_path = os.path.join(audio_dir, seg_filename)
-        logger.info(f"TTS segment {i}/{len(sentences)}")
-        tts_service.synthesize(sentence, seg_path, worker_url)
+        logger.info(f"TTS segment {i}/{len(sentences)} using voice {selected_voice}")
+        tts_service.synthesize(sentence, seg_path, worker_url, voice=selected_voice)
 
         segment = Segment(
             material_id=material.id,

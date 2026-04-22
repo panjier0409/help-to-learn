@@ -47,11 +47,13 @@ def add_note(
     back_text: str,
     audio_filename: str,
     translation: Optional[str] = None,
+    model_name: str = "Basic",
+    share_url: Optional[str] = None,
 ) -> int:
     """
     Add a note to Anki deck.
-    Front: transcribed text (+ optional translation)
-    Back: audio player + full text
+    Front: transcribed text (+ optional translation + share link)
+    Back: audio player + full text (+ share link)
     Returns the Anki note ID.
     """
     ensure_deck(url, deck_name)
@@ -59,18 +61,22 @@ def add_note(
     front = front_text
     if translation:
         front += f"<br><small style='color:#666'>{translation}</small>"
+    if share_url:
+        front += f"<br><small><a href='{share_url}' style='color:#4a9eff'>🔗 View online</a></small>"
 
     back = f"[sound:{audio_filename}]<br><br>{back_text}"
     if translation:
         back += f"<br><small style='color:#666'>{translation}</small>"
+    if share_url:
+        back += f"<br><small><a href='{share_url}' style='color:#4a9eff'>🔗 View online</a></small>"
 
     result = _request(
         url,
         "addNote",
         note={
             "deckName": deck_name,
-            "modelName": "Basic",
-            "fields": {"Front": front, "Back": back},
+            "modelName": model_name,
+            "fields": {"正面": front, "背面": back},
             "options": {"allowDuplicate": False},
         },
     )

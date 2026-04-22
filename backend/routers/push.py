@@ -30,6 +30,11 @@ def _do_push(segment: Segment, user: User, platform: Platform, session: Session)
     session.refresh(record)
 
     try:
+        # Build a public share link pointing to the material page with segment anchor
+        share_url = (
+            f"{cfg.SITE_BASE_URL}/share/{segment.material_id}#seg-{segment.id}"
+        )
+
         if platform == Platform.anki:
             if not anki_service.check_connection(cfg.ANKI_CONNECT_URL):
                 raise RuntimeError(
@@ -44,19 +49,35 @@ def _do_push(segment: Segment, user: User, platform: Platform, session: Session)
                 back_text=segment.text,
                 audio_filename=audio_filename,
                 translation=segment.translation,
+                model_name=user.anki_model_name,
+                share_url=share_url,
             )
             record.anki_card_id = note_id
 
         elif platform == Platform.telegram:
             if not user.telegram_chat_id:
                 raise RuntimeError("Telegram chat ID not set. Update it in Settings.")
-            if not cfg.TELEGRAM_BOT_TOKEN:
-                raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured on the server.")
+            bot_token = user.telegram_bot_token or cfg.TELEGRAM_BOT_TOKEN
+            if not bot_token:
+                raise RuntimeError("Telegram bot token is not configured (neither in Settings nor on Server).")
             caption = segment.text
             if segment.translation:
                 caption += f"\n\n{segment.translation}"
+
+            # Add hashtag based on material title or URL
+            material = session.get(Material, segment.material_id)
+            if material:
+                tag_source = material.title or material.source_url or ""
+                import re
+                tag = re.sub(r'\W+', '', tag_source)
+                if tag:
+                    caption += f"\n\n#{tag}"
+
+            # Append share link so the receiver can jump to this segment directly
+            caption += f"\n\n🔗 <a href='{share_url}'>{share_url}</a>"
+
             telegram_service.send_audio(
-                bot_token=cfg.TELEGRAM_BOT_TOKEN,
+                bot_token=bot_token,
                 chat_id=user.telegram_chat_id,
                 audio_path=segment.audio_file_path,
                 caption=caption,

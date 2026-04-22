@@ -16,6 +16,12 @@
                    placeholder="English::Listening" id="input-anki-deck" />
             <div class="form-text">Make sure this deck exists in Anki or it will be created.</div>
           </div>
+          <div class="mb-3">
+            <label class="form-label">Note Model Name</label>
+            <input v-model="form.anki_model_name" type="text" class="form-control"
+                   placeholder="Basic" id="input-anki-model" />
+            <div class="form-text">Note type (e.g., Basic, Basic (and reversed card)). <strong>Must exist</strong> in your Anki collection.</div>
+          </div>
         </div>
       </div>
 
@@ -23,6 +29,12 @@
       <div class="card mb-4 shadow-sm">
         <div class="card-header"><strong>✈️ Telegram</strong></div>
         <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Bot Token (Optional)</label>
+            <input v-model="form.telegram_bot_token" type="password" class="form-control"
+                   placeholder="Leave empty to use server default" id="input-telegram-token" />
+            <div class="form-text">Set this if you want to use your own Telegram bot.</div>
+          </div>
           <div class="mb-3">
             <label class="form-label">Your Chat ID</label>
             <input v-model="form.telegram_chat_id" type="text" class="form-control"
@@ -67,7 +79,9 @@ import { usersApi } from '../api/index.js'
 
 const form = ref({
   anki_deck_name: '',
+  anki_model_name: '',
   telegram_chat_id: '',
+  telegram_bot_token: '',
   tts_worker_url: '',
   tts_token: '',
 })
@@ -80,10 +94,12 @@ async function load() {
     const res = await usersApi.me()
     const u = res.data
     form.value = {
-      anki_deck_name:   u.anki_deck_name || 'English::Listening',
-      telegram_chat_id: u.telegram_chat_id || '',
-      tts_worker_url:   u.tts_worker_url || '',
-      tts_token:        '',  // Never pre-fill token
+      anki_deck_name:     u.anki_deck_name || 'English::Listening',
+      anki_model_name:    u.anki_model_name || 'Basic',
+      telegram_chat_id:   u.telegram_chat_id || '',
+      telegram_bot_token: '', // Sensitive
+      tts_worker_url:     u.tts_worker_url || '',
+      tts_token:          '', // Sensitive
     }
   } catch {}
 }
@@ -94,7 +110,8 @@ async function save() {
   error.value = ''
   try {
     const payload = { ...form.value }
-    if (!payload.tts_token) delete payload.tts_token  // Don't overwrite with empty
+    if (!payload.tts_token) delete payload.tts_token
+    if (!payload.telegram_bot_token) delete payload.telegram_bot_token
     await usersApi.update(payload)
     saved.value = true
     setTimeout(() => { saved.value = false }, 3000)

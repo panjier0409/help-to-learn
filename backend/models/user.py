@@ -12,7 +12,9 @@ class User(SQLModel, table=True):
     hashed_password: str
 
     telegram_chat_id: Optional[str] = Field(default=None, max_length=64)
+    telegram_bot_token: Optional[str] = Field(default=None, max_length=256)
     anki_deck_name: str = Field(default="English::Listening", max_length=256)
+    anki_model_name: str = Field(default="Basic", max_length=256)
     tts_worker_url: str = Field(default="https://tts.wangwangit.com", max_length=512)
     tts_token: Optional[str] = Field(default=None, max_length=256)
 
