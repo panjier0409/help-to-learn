@@ -130,8 +130,15 @@ const userConfig = ref(null)
 // Audio sequence logic
 const isSequencePlaying = ref(false)
 const currentPlayingId = ref(null)
+let isProgrammaticPlay = false
 
 function onAudioPlay(segId) {
+  if (!isProgrammaticPlay) {
+    // User manually clicked play (Single Play), turn off sequence mode
+    isSequencePlaying.value = false
+  }
+  isProgrammaticPlay = false // reset
+  
   // Pause other players
   if (currentPlayingId.value && currentPlayingId.value !== segId) {
     const prev = document.getElementById(`audio-player-${currentPlayingId.value}`)
@@ -149,6 +156,7 @@ function onAudioEnded(segId) {
       if (nextAudio) {
         // Scroll to next segment
         nextAudio.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        isProgrammaticPlay = true
         nextAudio.play()
       }
     } else {
@@ -170,6 +178,7 @@ function startSequence() {
     const audio = document.getElementById(`audio-player-${segToPlay.id}`)
     if (audio) {
       audio.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      isProgrammaticPlay = true
       audio.play()
     }
   }
