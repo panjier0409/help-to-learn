@@ -30,7 +30,11 @@ RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 
 # Copy source code
 COPY backend/ ./backend/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 COPY nginx/nginx.conf /etc/nginx/sites-available/default
 
 # Remove default nginx site link and re-link (standard debian/ubuntu nginx setup)
@@ -47,5 +51,4 @@ ENV DATABASE_URL=sqlite:////app/data/data.db
 
 EXPOSE 80
 
-# Start everything via supervisord
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["/app/entrypoint.sh"]
