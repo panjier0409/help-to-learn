@@ -200,15 +200,24 @@ async function loadSegments() {
 
 // --- AnkiConnect Frontend Helpers ---
 async function ankiRequest(action, params = {}) {
-  const res = await fetch('http://127.0.0.1:8765', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, version: 6, params })
-  })
-  if (!res.ok) throw new Error('Network error or CORS')
-  const data = await res.json()
-  if (data.error) throw new Error(data.error)
-  return data.result
+  const url = userConfig.value?.anki_connect_url || 'http://127.0.0.1:8765'
+  try {
+    const body = JSON.stringify({ action, version: 6, params })
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body
+    })
+    if (!res.ok) throw new Error(`AnkiConnect HTTP error! status: ${res.status}`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    return data.result
+  } catch (e) {
+    if (e.name === 'TypeError' && (e.message === 'Failed to fetch' || e.message.includes('NetworkError'))) {
+      throw new Error(`Connection failed to ${url}. \n1. Is Anki/Ankiconnect running?\n2. If using Android, check IP and set "CORS Host" to "*" in App settings.`)
+    }
+    throw e
+  }
 }
 
 function blobToBase64(blob) {
@@ -229,25 +238,29 @@ async function doAnkiPush(seg) {
 
   // 1. Download audio from backend API
   const audioRes = await api.get(`/audio/${seg.id}`, { responseType: 'blob' })
-  const blob = audioRes.data
-  const b64Data = await blobToBase64(blob)
+  const b64Data = await blobToBase64(audioRes.data)
 
-  // 2. Ensure deck exists
+  // 2. Ensure deck exists (Optional for Android API as it doesn't support createDeck)
   const deckName = userConfig.value?.anki_deck_name || "English::Listening"
-  await ankiRequest('createDeck', { deck: deckName })
+  try {
+    await ankiRequest('createDeck', { deck: deckName })
+  } catch (e) {
+    console.warn("createDeck failed or unsupported, continuing...", e.message)
+  }
 
-  // 3. Store media
-  await ankiRequest('storeMediaFile', {
+  // 3. Store media - Android API returns the FINAL filename (it renames to avoid collisions)
+  const finalFilename = await ankiRequest('storeMediaFile', {
     filename: audioFilename,
     data: b64Data
-  })
+  }) || audioFilename
 
   // 4. Add Note
   let front = seg.text
   if (seg.translation) front += `<br><small style='color:#666'>${seg.translation}</small>`
   front += `<br><small><a href='${shareUrl}' style='color:#4a9eff'>🔗 View online</a></small>`
 
-  let back = `[sound:${audioFilename}]`
+  // Use the filename returned by the server
+  let back = `[sound:${finalFilename}]`
 
   const noteId = await ankiRequest('addNote', {
     note: {
@@ -271,18 +284,19 @@ async function pushSeg(seg, platform) {
         await segmentsApi.push(seg.id, 'anki', noteId)
         showToast(`Sent to Anki!`, 'success')
       } catch (e) {
-        if (e.message.includes('CORS') || e.message === 'Failed to fetch') {
-          showToast('Anki blocked the request. Please set webCorsOriginList in AnkiConnect config!', 'danger')
-        } else {
-          throw e
+        let msg = e.message
+        if (msg.includes('CORS')) {
+          msg = 'Anki blocked the request. Please add this site to webCorsOriginList in AnkiConnect settings.'
         }
+        showToast(`Anki error: ${msg}`, 'danger')
       }
     } else {
       await segmentsApi.push(seg.id, platform)
       showToast(`Sent to ${platform}!`, 'success')
     }
   } catch (e) {
-    showToast(e.response?.data?.detail || e.message || `Push to ${platform} failed`, 'danger')
+    const detail = e.response?.data?.detail || e.message || `Push to ${platform} failed`
+    showToast(detail, 'danger')
   } finally {
     pushing.value = false
   }
@@ -291,25 +305,48 @@ async function pushSeg(seg, platform) {
 async function bulkPush(platform) {
   if (!confirm(`Push all ${segments.value.length} segments to ${platform}?`)) return
   pushing.value = true
+  let successCount = 0
+  let failCount = 0
+  let lastError = null
+
   try {
     if (platform === 'anki') {
-      let count = 0
       for (const seg of segments.value) {
         try {
           const noteId = await doAnkiPush(seg)
           await segmentsApi.push(seg.id, 'anki', noteId)
-          count++
+          successCount++
         } catch (e) {
-          if (e.message.includes('CORS') || e.message === 'Failed to fetch') {
-            throw new Error('Anki blocked the request. Add this site to webCorsOriginList in AnkiConnect.')
-          }
+          failCount++
+          lastError = e.message
           console.error("Failed seg:", seg.id, e)
+          if (e.message.includes('Connection refused') || e.message.includes('CORS')) {
+            throw e // Stop early if it's a connectivity/config issue
+          }
         }
       }
-      showToast(`Pushed ${count}/${segments.value.length} segments to Anki!`, 'success')
+      
+      if (successCount === segments.value.length) {
+        showToast(`Successfully pushed all ${successCount} segments to Anki!`, 'success')
+      } else if (successCount > 0) {
+        showToast(`Pushed ${successCount} segments, but ${failCount} failed.`, 'warning')
+      } else {
+        showToast(`Bulk push failed: ${lastError || 'All segments failed'}`, 'danger')
+      }
     } else {
-      await materialsApi.push(materialId, platform)
-      showToast(`All segments pushed to ${platform}!`, 'success')
+      const res = await materialsApi.push(materialId, platform)
+      const results = res.data // Array of PushRecord
+      successCount = results.filter(r => r.status === 'sent').length
+      failCount = results.filter(r => r.status === 'failed').length
+      
+      if (failCount === 0) {
+        showToast(`All segments pushed to ${platform}!`, 'success')
+      } else if (successCount > 0) {
+        showToast(`Pushed ${successCount} segments, but ${failCount} failed.`, 'warning')
+      } else {
+        const errorMsg = results.find(r => r.status === 'failed')?.error_msg || 'Unknown error'
+        showToast(`Bulk push failed: ${errorMsg}`, 'danger')
+      }
     }
   } catch (e) {
     showToast(e.response?.data?.detail || e.message || 'Bulk push failed', 'danger')

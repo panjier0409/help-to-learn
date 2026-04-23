@@ -11,6 +11,7 @@ class UserRead(BaseModel):
     telegram_bot_token: Optional[str]
     anki_deck_name: str
     anki_model_name: str
+    anki_connect_url: str
     tts_worker_url: str
     created_at: datetime
     is_active: bool
@@ -23,5 +24,6 @@ class UserUpdate(BaseModel):
     telegram_bot_token: Optional[str] = None
     anki_deck_name: Optional[str] = None
     anki_model_name: Optional[str] = None
+    anki_connect_url: Optional[str] = None
     tts_worker_url: Optional[str] = None
     tts_token: Optional[str] = None

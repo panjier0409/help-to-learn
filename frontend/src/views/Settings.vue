@@ -22,6 +22,12 @@
                    placeholder="Basic" id="input-anki-model" />
             <div class="form-text">Note type (e.g., Basic, Basic (and reversed card)). <strong>Must exist</strong> in your Anki collection.</div>
           </div>
+          <div class="mb-3">
+            <label class="form-label">AnkiConnect URL</label>
+            <input v-model="form.anki_connect_url" type="url" class="form-control"
+                   placeholder="http://127.0.0.1:8765" id="input-anki-url" />
+            <div class="form-text">Address of your Anki desktop with AnkiConnect. Use <code>http://&lt;IP&gt;:8765</code> for LAN access.</div>
+          </div>
         </div>
       </div>
 
@@ -80,6 +86,7 @@ import { usersApi } from '../api/index.js'
 const form = ref({
   anki_deck_name: '',
   anki_model_name: '',
+  anki_connect_url: '',
   telegram_chat_id: '',
   telegram_bot_token: '',
   tts_worker_url: '',
@@ -96,6 +103,7 @@ async function load() {
     form.value = {
       anki_deck_name:     u.anki_deck_name || 'English::Listening',
       anki_model_name:    u.anki_model_name || 'Basic',
+      anki_connect_url:   u.anki_connect_url || 'http://127.0.0.1:8765',
       telegram_chat_id:   u.telegram_chat_id || '',
       telegram_bot_token: '', // Sensitive
       tts_worker_url:     u.tts_worker_url || '',

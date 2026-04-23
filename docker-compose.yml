@@ -8,8 +8,6 @@ services:
       - ./storage:/app/storage
       - ./data:/app/data
       - ./cookies.txt:/app/cookies.txt
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=sqlite:////app/data/data.db
-      - STORAGE_BASE_PATH=/app/storage
+      # 移除 env_file: - .env，因为它不再需要了
+      # 你可以在这里继续添加其他需要的配置，例如：
+      - SITE_BASE_URL=https://yourdomain.com
